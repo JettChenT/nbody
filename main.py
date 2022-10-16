@@ -1,16 +1,8 @@
 import taichi as ti
-stype = input('Enter simulation type:')
-
-if stype=="micro":
-    N = 30
-    R = 5
-elif stype=='3body':
-    N=3
-    R=3
-else:
-    N = 5000
-    R = 30
-# mass = 30
+N = int(input("enter N:"))
+R = max(4,N//100)
+BOUND = False
+SPHERE = True
 radius = 0.3
 dt = 0.005
 G = 1
@@ -39,17 +31,24 @@ def update(dt: ti.f32):
     for i in range(N):
         vel[i] += force[i]*dt/mass[i]
         pos[i] += vel[i]*dt
+        if BOUND:
+            for k in ti.static(range(3)):
+                if pos[i][k]<-R:
+                    pos[i][k] = (pos[i][k]+R)*(-1)-R
+                    vel[i][k]*=-1
+                if pos[i][k]>R:
+                    pos[i][k] = 2*R-pos[i][k]
+                    vel[i][k]*=-1
 
 @ti.kernel
 def initialize():
     for i in range(N):
-        k = ti.random()*2*ti.math.pi
         tpos = ti.Vector([ti.random()*2-1, ti.random()*2-1, ti.random()*2-1])
-        tpos /= tpos.norm()
+        if SPHERE:
+            tpos/=tpos.norm()
         tpos *= R
         pos[i] = tpos
         mass[i] = 30
-        # radius[i] = 0.2
 
 def show_options():
     global dt
@@ -62,6 +61,11 @@ def show_options():
     radius = window.GUI.slider_float("Radius", radius, 0, 3)
     dt = window.GUI.slider_float("dt", dt, 0, 0.02)
     cam_speed = window.GUI.slider_float("vCamera", cam_speed, 0, 3)
+    if window.GUI.button("Reset"):
+        initialize()
+        for i in range(N):
+            force[i] = ti.Vector([.0, .0, .0])
+            vel[i] = ti.Vector([.0, .0, .0])
     if paused:
         if window.GUI.button("Continue"):
             paused = False
@@ -74,11 +78,11 @@ def render():
     camera.track_user_inputs(window, movement_speed=cam_speed, hold_key=ti.ui.RMB)
     scene.set_camera(camera)
 
-    scene.ambient_light((0.0, 0.8, 0.8))
-    scene.particles(pos, radius=radius)
+    scene.ambient_light((0.8, 0.8, 0.8))
+    scene.particles(pos, radius=radius, color=(.1,0.8,0.8))
 
-    scene.point_light(pos=(0.5, 1.5, 0.5), color=(0.5, 0.5, 0.5))
-    scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.5, 0.5, 0.5))
+    scene.point_light(pos=(R, R, R), color=(1, 1, 1))
+    scene.point_light(pos=(-R, -R, -R), color=(1, 0, 0))
     canvas.scene(scene)
 
 initialize()
@@ -86,7 +90,7 @@ initialize()
 window = ti.ui.Window("N body simulation!", (1080, 720))
 scene = ti.ui.Scene()
 camera = ti.ui.make_camera()
-camera.position(10.0, 0.0, 0.0)
+camera.position(R*3, 0.0, 0.0)
 camera.lookat(0.0, 0.0, 0.0)
 camera.fov(60)
 canvas = window.get_canvas()
